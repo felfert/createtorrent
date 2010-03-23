@@ -1,6 +1,9 @@
-1.1.4
+1.1.5
 - support for multiple filenames
 - support for private torrents
+
+1.1.4
+- Left blank by Daniel
 
 1.1.3
 - small bugfix parsing arguments
