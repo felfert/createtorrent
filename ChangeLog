@@ -1,0 +1,21 @@
+1.1.4
+- support for multiple filenames
+- support for private torrents
+
+1.1.3
+- small bugfix parsing arguments
+
+1.1.2
+- fixed crash for directories without read permissions
+- bugfixes by Jan-Marek Glogowski
+  - sort dictionary fields as required by spec
+  - correctly parse 'P' option
+  - correctly set sha length
+
+1.1.1
+- support files larger than 4GB (Peter Van Biesen)
+- fixed bug for inheritated directories (Oleg V. Smirnov)
+- reordered variable declarations
+
+0.1
+- initial version
