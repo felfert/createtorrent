@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <string.h>
-#include <libgen.h>
+#include <libgen.h>       // Don't use GNU version of basename
 #include <openssl/sha.h>
 #include <dirent.h>
 #include <time.h>
@@ -101,7 +101,7 @@ int main( int argc, char** const argv)
 		return 1;
 	}
 
-	if ( argc - optind >= 2) {
+	if( argc - optind >= 2) {
 		no_src = argc - optind - 1;
 		src = argv + optind;
 		outputfile = argv[ optind + no_src ];
@@ -173,7 +173,7 @@ int create_announce( const char* announce, char** const src, int no_src, const c
 				
 
 		// private torrent
-		if ( private ) {
+		if( private ) {
 			fprintf( f, "7:privatei1e", f);
 		}
 
@@ -380,53 +380,73 @@ int create_from_directory( const char* src, FILE* f, int piecelen )
 int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen ) 
 {
 	int ret = 0;
-	int i;
+	int i, j; 
 	char *p;
 	char *q;
 	char *common;
-	
-	common = (char*) canonicalize_file_name ( src[0] );
-	if ( common ) {
+	char **filename; 
 
+	filename = malloc( sizeof( char* ) * no_src );
+	// check for dupes
+	for( i = 0; i < no_src; i++ ) {
+		filename[i] = canonicalize_file_name( src[i] );
+		if ( ! filename[i] ) {
+			fprintf( stderr, "could not canonicalize %s\n", src[i] );
+			ret = 1;
+			break;
+		}
+		for( j = 0; j < i; j++ ) {
+			if( ! strcmp( filename[i], filename[j] ) )
+				break;
+		}
+		if( j != i ) {
+			fprintf( stderr, "can't include file \"%s\" twice\n",
+				 filename[i] );
+			for( j = 0; j < i; j++ ) {
+				free( filename[j] );
+				filename[j] = 0;
+			}
+			filename[i] = 0;
+			ret = 1;
+			break;
+		}
+	}
+	
+	if( filename[0] ) {
+		common = strdup( filename[0] );
 		// find common directory
-		for ( i = 1; i < no_src; i++ ) {
+		for( i = 1; i < no_src; i++ ) {
 			p = common;
 			char* start;
-			start = (char*)canonicalize_file_name ( src[i] );
+			start = filename[i];
 			q = start;
-			if (! start) {
-				fprintf( stderr, "could not canonicalize %s\n", src[i] );
-				ret = 1;
-				break;
-			}
-			while ( p && q ) {
+			while( p && q ) {
 				if ( *p != *q )
 					break;
 				p++;
 				q++;
 			}
 			*p = '\0';
-			free( start );
-		}
-		if ( strlen( common ) > 1 ) {
-			common[ strlen( common ) - 1 ] = '\0';
 		}
 		printf("using base directory \"%s\"\n", common);
-			
+		if( strlen( common ) > 1 ) {
+			common[ strlen( common ) - 1 ] = '\0';
+		} else { 
+			// the files have no common directories
+			fprintf( stderr, "warning: these files have no directory in common\n" );
+			free( common );
+			common = "root";
+		}
 
 		buf = (char*) malloc( piecelen );
 
 		// start of "files" list
 		fputs( "5:filesl", f );
-		for (i = 0; i <  no_src; i++ ) {
+		for( i = 0; i <  no_src; i++ ) {
 			struct stat s;
 			DIR *dir;
-			q = (char*) canonicalize_file_name ( src[i] );
-			if (! q) {
-				fprintf( stderr, "could not canonicalize %s\n", src[i] );
-				ret = 1;
-				break;
-			}
+
+			q = filename[i];
 			if( ! stat( q , &s ) ) {
 				if( S_ISREG( s.st_mode ) ) {
 
@@ -453,7 +473,6 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 		// "piece length"
 		fprintf( f, "12:piece lengthi%de", piecelen );
 
-		printf( "%d\n", bytesin);
 		// "pieces"
 		if( shasize || bytesin ) {		
 			// first e comes from file list
@@ -471,14 +490,18 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 			free( sha );
 		}
 		free( buf );
+		
 		if( ! files ) {
 			fprintf( stderr, "warning: no files found in directory\n" );
 		}
 
+		free( common );
+
 	} else {
-		fprintf( stderr, "could not canonicalize %s\n", src[i] );
 		ret = 1;
 	}
+
+	free( (char**) filename );
 	return ret;
 }	
 
