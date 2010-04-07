@@ -1,7 +1,6 @@
 /**
  * BitTorrent spec requires dictionaries to be sorted!
  */
-
 #include <unistd.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -14,17 +13,19 @@
 #include <dirent.h>
 #include <time.h>
 
+#include "config.h"
+
 /* to prevent buffer overflows */
 #define MAX_RECURSION 29
+#define MAX_ANNOUNCE  100
 
 void help_message();
-int create_announce( const char*, char** const, int, const char*, const char*, const char*, int );
+int create_announce( char** const, int, char** const, int, const char*, const char*, const char*, int );
 int create_from_file( const char*, FILE*, long long, int );
 int create_from_directory( const char*, FILE*, int );
 int create_from_assortment( char** const, int, FILE*, int ); 
 void write_name( const char*, FILE* );
 
-const char* __version__ = "1.1.4";
 int files = 0;
 char* comment = NULL;
 int inclusive = 0;
@@ -38,7 +39,8 @@ int main( int argc, char** const argv)
 {
 	int i;
 	int optidx = 0;
-	char* announce = NULL;
+	char** announce;
+	int no_announce = 0;
 	char** src = NULL;
 	int no_src = 0;
 	char* outputfile = NULL;
@@ -46,6 +48,8 @@ int main( int argc, char** const argv)
 	char* path = "/announce";
 	int piecelen = 256 * 1024;
 
+	announce = (char**) malloc( sizeof(char*) * MAX_ANNOUNCE);
+	announce[0] = NULL;
 	while( 1 ) {
 		static struct option options[] = {
 			{ "announce", 1, 0, 'a' },  // announce
@@ -79,7 +83,10 @@ int main( int argc, char** const argv)
 				path = optarg;
 				break;
 		        case 'a':
-				announce = optarg;
+				if (no_announce <= MAX_ANNOUNCE - 1)
+					announce[no_announce++] = optarg;
+				else 
+					fprintf(stderr, "warning: more than %d announce urls. The rest will be ignored.\n", MAX_ANNOUNCE);
 				break;
 			case 'p':
 				port = optarg;
@@ -88,7 +95,10 @@ int main( int argc, char** const argv)
 				help_message();
 				return 0;
 			case 'V':
-				printf( "createtorrent %s (Daniel Etzold <detzold@gmx.de>)\n", __version__ );
+				printf( "createtorrent %s\n", VERSION);
+				printf( "  by: Daniel Etzold <detzold@gmx.de>\n");
+				printf( "      James M. Leddy <jm.leddy@gmail.com>\n");
+					
 				return 0;
 			case 'l':
 				piecelen = atoi( optarg );
@@ -108,43 +118,69 @@ int main( int argc, char** const argv)
 	}	
 		
 	
-	if( announce && src && outputfile && port && path ) {
-		return create_announce( announce, src, no_src, outputfile, port, path, piecelen );
+	if( no_announce > 0 && announce[0] && src && 
+	    outputfile && port && path ) {
+		return create_announce( announce, no_announce, src, no_src, outputfile, port, path, piecelen );
 	}
 
 	fprintf( stderr, "Invalid arguments. Use -h for help.\n" );
 	return 1;
 }
 
-int create_announce( const char* announce, char** const src, int no_src, const char* output, const char* port, const char* path, int piecelen )
+int create_announce( char** const announce, int no_announce, char** const src, int no_src, const char* output, const char* port, const char* path, int piecelen )
 {
 	struct stat s;
 	const char* onesrc = *src;
+	char *tok;
 	int ret = 0;
 	int p = atoi( port );
+	int i;
+	char *creationtag = "createtorrent/" VERSION ;
+
 
 	// "announce", "comment", "creation date", "info"
 	
 	FILE* f = fopen( output, "w" );
 	if( f ) {
 		// Open main dictionary and write "announce"
-		// if port == '0' don't specify port
-		if (p) {
+		// If announce has a more than 3 slashes, use new method
+		tok = strdup( announce[0] );
+		strtok(tok, "/");
+		strtok(NULL, "/");
+		if( strtok(NULL, "/") == NULL) {
+			fprintf( stderr, "warning: deprecated use of announce. Use the full path of the tracker url.\n" );
+			fprintf( stderr, "     ex: http://example.com/announce O http://example.com:6881/announce.php\n" );
 			fprintf( f, "d8:announce%d:%s:%s%s", 
-				 strlen( announce ) + strlen( path ) 
-				 + strlen( port ) + 1, announce, port, path );
-
+				 strlen( announce[0] ) + strlen( path ) 
+				 + strlen( port ) + 1, announce[0], port, 
+				 path );
+			if( no_announce > 1 )
+				fprintf( stderr, "warning: cannot use multiple announce with legacy port and path tags\n" );
 		} else {
-			fprintf( f, "d8:announce%d:%s%s", 
-				 strlen( announce ) + strlen( path ), 
-				 announce, path );
-		}
+			fprintf( f, "d8:announce%d:%s", 
+				 strlen( announce[0] ), announce[0]);
 			
+                        // "announce-list" - BEP 12
+			if( no_announce > 1 ) {
+				fprintf( f, "13:announce-listl" );
+				for( i = 0; i < no_announce; i++ ) {
+					fprintf( f, "l%d:%se", 
+						 strlen( announce[i] ),
+						 announce[i] );
+				}
+				fputs( "e", f );
+			}
+		}
+
 		// "comment"
 		if( comment ) {
 			fprintf( f, "7:comment%d:%s", 
 				 strlen( comment ), comment );
 		}
+
+		// "created by"
+		fprintf( f, "10:created by%d:%s", strlen( creationtag ),
+			 creationtag );
 
 		// "creation date"
 		fprintf( f, "13:creation datei%de", (unsigned) time( NULL ) );
@@ -510,8 +546,6 @@ void help_message()
 	printf( "Usage: createtorrent [OPTIONS] -a announce <input file or directory> <output torrent>\n\n"
 		"options:\n"
 		"--announce    -a  <announceurl> : announce url\n"
-		"--port        -p  <port>        : sets the port, default: 6881\n"
-		"--path        -P  <path>        : sets the path on the server, default: /announce\n"
 		"--piecelength -l  <piecelen>    : sets the piece length in bytes, default: 262144\n"
 		"--comment     -c  <comment>     : adds an optional comment to the torrent file\n"
 		"--inclusive   -i                : include hidden *nix files (starting with '.')\n"
