@@ -30,6 +30,7 @@ int files = 0;
 char* comment = NULL;
 int inclusive = 0;
 int private = 0;
+int use_dht = 0;
 char* sha = NULL;
 int shasize = 0;
 int bytesin = 0;
@@ -47,6 +48,7 @@ int main( int argc, char** const argv)
 	char* port = "6881";
 	char* path = "/announce";
 	int piecelen = 256 * 1024;
+	char  dht[60];
 
 	announce = (char**) malloc( sizeof(char*) * MAX_ANNOUNCE);
 	announce[0] = NULL;
@@ -61,9 +63,10 @@ int main( int argc, char** const argv)
 			{ "comment", 1, 0, 'c' },
 			{ "inclusive", 0, 0, 'i' },
 			{ "private", 0, 0, 'x' },
+			{ "dht", 0, 0, 'd' },			
 			{ 0, 0, 0, 0 }
 		};
-		int c = getopt_long( argc, argv, "a:hixVp:P:l:c:", options, &optidx );
+		int c = getopt_long( argc, argv, "a:dhixVp:P:l:c:", options, &optidx );
 		if( c == -1 ) {
 			break;
 		}
@@ -88,6 +91,9 @@ int main( int argc, char** const argv)
 				else 
 					fprintf(stderr, "warning: more than %d announce urls. The rest will be ignored.\n", MAX_ANNOUNCE);
 				break;
+		        case 'd':
+				use_dht = 1;
+				break;
 			case 'p':
 				port = optarg;
 				break;
@@ -107,7 +113,7 @@ int main( int argc, char** const argv)
 	}
 
 	if( piecelen <= 0 ) {
-		fprintf( stderr, "piece length has to be > 0.\n" );
+		fprintf( stderr, "error: piece length has to be > 0.\n" );
 		return 1;
 	}
 
@@ -116,6 +122,26 @@ int main( int argc, char** const argv)
 		src = argv + optind;
 		outputfile = argv[ optind + no_src ];
 	}	
+	
+	if( use_dht ) {
+		if( no_announce > 0 && announce[0] ) {
+			fprintf( stderr, "warning: both --announce and --dht specified. --dht will be ignored.\n" );
+		} else if ( RAND_MAX < 2147483647 ) {
+			fprintf( stderr, "error: random number generator isn't sufficient on this system for --dht.\n"
+				 "       Use --anounce instead.\n" );
+			return 1;
+		} else {
+			strcpy( &dht[0], "dht://" );
+			srand( time( 0 ));
+			for( i = 0; i < 40; i+=8 ) {
+				snprintf( &dht[6+i], 9, "%0X", rand() );
+			}
+			strcat( &dht[0], ".dht/announce" );
+			
+			no_announce=1;
+			announce[0] = &dht[0];
+		}
+	}
 		
 	
 	if( no_announce > 0 && announce[0] && src && 
@@ -425,7 +451,7 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 	filename = malloc( sizeof( char* ) * no_src );
 	// check for dupes
 	for( i = 0; i < no_src; i++ ) {
-		filename[i] = canonicalize_file_name( src[i] );
+		filename[i] = (char*) canonicalize_file_name( src[i] );
 		if ( ! filename[i] ) {
 			fprintf( stderr, "could not canonicalize %s\n", src[i] );
 			ret = 1;
