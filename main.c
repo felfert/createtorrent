@@ -149,6 +149,8 @@ int main( int argc, char** const argv)
 		return create_announce( announce, no_announce, src, no_src, outputfile, port, path, piecelen );
 	}
 
+	free(announce);
+
 	fprintf( stderr, "Invalid arguments. Use -h for help.\n" );
 	return 1;
 }
