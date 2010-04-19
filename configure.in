@@ -1,7 +1,13 @@
 AC_INIT(main.c)
-AM_CONFIG_HEADER(config.h)
 AM_INIT_AUTOMAKE(createtorrent,1.1.4)
+AC_PREREQ([2.63])
+AM_CONFIG_HEADER(config.h)
+AC_CONFIG_SRCDIR([benclint.c])
 AC_PROG_CC
+AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
+AC_FUNC_MALLOC
+AC_FUNC_REALLOC
+AC_CHECK_FUNCS([memset strdup])
 AC_CHECK_LIB([ssl],[SHA1],,[AC_MSG_ERROR([error, OpenSSL required])])
 AC_HEADER_DIRENT
 AC_HEADER_STDC
