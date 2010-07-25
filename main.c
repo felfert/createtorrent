@@ -436,6 +436,7 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 	int i, j;
 	char *p;
 	char *q;
+	char *lst_slash;
 	char *common;
 	char **filename;
 
@@ -475,12 +476,16 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 			while ( p && q ) {
 				if ( *p != *q )
 					break;
+				if ( *p == '/' )
+				    lst_slash = p;
 				p++;
 				q++;
 			}
 			*p = '\0';
+			lst_slash[1] = '\0';
 		}
 		printf("using base directory \"%s\"\n", common);
+		
 		if ( strlen( common ) > 1 )
 			common[ strlen( common ) - 1 ] = '\0';
 		else {
