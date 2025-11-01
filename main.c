@@ -36,6 +36,8 @@ int shasize = 0;
 int bytesin = 0;
 unsigned char* buf = NULL;
 
+FILE *progress = NULL;
+
 int main( int argc, char** const argv)
 {
 	int i;
@@ -48,6 +50,7 @@ int main( int argc, char** const argv)
 	int piecelen = 256 * 1024;
 	char dht[60];
 
+    progress = fdopen(dup(STDOUT_FILENO), "w");
 	announce = (char**)malloc(sizeof(char*) * MAX_ANNOUNCE);
 	announce[0] = NULL;
 	while (1) {
@@ -153,7 +156,12 @@ int create_announce(char** const announce, int no_announce, char** const src, in
 
 	// "announce", "comment", "creation date", "info"
 
-	FILE* f = fopen( output, "w" );
+    int tofile = strcmp(output, "-");
+    if (!tofile) {
+        fclose(progress);
+        progress = fdopen(dup(STDERR_FILENO), "w");
+    }
+	FILE* f = (tofile) ? fopen(output, "w") : stdout;
 
 	if ( f ) {
 		// Open main dictionary and write "announce"
@@ -261,8 +269,8 @@ int create_from_file(const char* src, FILE* f, long long fsize, int piecelen)
 	if (fs) {
 		unsigned char *sha = malloc(sizeof(char) * SHA_DIGEST_LENGTH);
 		unsigned char *buf = malloc(piecelen);
-		printf("computing sha1... ");
-		fflush(stdout);
+		fprintf(progress, "computing sha1... ");
+		fflush(progress);
 		while ((r = fread( buf, 1, piecelen, fs))) {
 			SHA1(buf, r, sha);
 			fwrite(sha, 1, 20, f);
@@ -270,7 +278,7 @@ int create_from_file(const char* src, FILE* f, long long fsize, int piecelen)
 		free(buf);
 		free(sha);
 		fclose(fs);
-		printf("done\n");
+		fprintf(progress, "done\n");
 	} else {
 		fprintf(stderr, "could not open file %s\n", src);
 		return 1;
@@ -303,7 +311,7 @@ int add_file(FILE *torrent, long long fsize, char *fname, int piecelen, const ch
 
 	// "length", "path"
 
-	printf( "adding %s\n", fname );
+	fprintf(progress, "adding %s\n", fname );
 	if ( fs ) {
 		int r;
 		char fname_t[8092];
@@ -351,12 +359,12 @@ int process_directory(DIR *d, FILE *torrent, char *p, int level, int piecelen, c
 					snprintf( path, sizeof(path), "%s/%s", p, n->d_name );
 					dir = opendir( path );
 					if (!dir)
-						printf("skipping directory %s (%m)\n", path);
+						fprintf(progress, "skipping directory %s (%m)\n", path);
 					else
 						process_directory(dir, torrent, path, level, piecelen, strip);
 				}
 			} else
-				printf( "ignoring %s (no directory or regular file)\n", fbuf );
+				fprintf(progress, "ignoring %s (no directory or regular file)\n", fbuf );
 		} else
 			fprintf( stderr, "could not stat file %s\n", fbuf );
 	}
@@ -467,7 +475,7 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
             if (NULL != last_slash)
                 last_slash[1] = '\0';
 		}
-		printf("using base directory \"%s\"\n", common);
+		fprintf(progress, "using base directory \"%s\"\n", common);
 		
 		if ( strlen( common ) > 1 )
 			common[ strlen( common ) - 1 ] = '\0';
@@ -495,13 +503,13 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 				} else if ( S_ISDIR(s.st_mode) ) {
 					dir = opendir( q );
 					if (!dir)
-						printf("skipping directory %s (%m)\n", src[i]);
+						fprintf(progress, "skipping directory %s (%m)\n", src[i]);
 					else {
 						process_directory(dir, f, q, 0, piecelen, common);
 						closedir( dir );
 					}
 				} else
-					printf( "ignoring %s (no directory or regular file)\n", src[i] );
+					fprintf(progress, "ignoring %s (no directory or regular file)\n", src[i] );
 			}
 		}
 		fputs( "e", f );  // mark end of "files" list
@@ -542,7 +550,8 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 
 void help_message()
 {
-	printf( "Usage: createtorrent [OPTIONS] -a announce <input file or directory> <output torrent>\n\n"
+	printf( "Usage: createtorrent [OPTIONS] -a announce <input file or directory> <output.torrent>\n\n"
+        "Specifying - as output file, writes to stdout\n\n"
 		"options:\n"
 		"--announce    -a  <announceurl> : announce url\n"
 		"--piecelength -l  <piecelen>    : sets the piece length in bytes, default: 262144\n"
