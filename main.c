@@ -234,7 +234,7 @@ int create_announce(char** const announce, int no_announce, char** const src, in
 
 		// private torrent
 		if (private)
-			fprintf(f, "7:privatei1e", f);
+			fprintf(f, "7:privatei1e");
 
 		// Close info and main dictionary
 		fputs("ee", f);
