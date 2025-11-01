@@ -1,19 +1,19 @@
-/**
- * BitTorrent spec requires dictionaries to be sorted!
- */
+#include "config.h"
+
 #include <unistd.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef HAVE_SYS_TIME_H
+#  include <sys/time.h>
+#endif
 #include <string.h>
 #include <libgen.h>       // Don't use GNU version of basename
 #include <openssl/sha.h>
 #include <dirent.h>
 #include <time.h>
-
-#include "config.h"
 
 /* to prevent buffer overflows */
 #define MAX_RECURSION 29

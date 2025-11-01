@@ -1,0 +1,25 @@
+# Intermediate files from autotools
+INSTALL
+Makefile.in
+aclocal.m4
+autom4te.cache
+compile
+config.guess
+config.h.in
+config.log
+config.sub
+configure
+depcomp
+install-sh
+missing
+# editor backups
+*~
+.*.swp
+# intermediate files from configure & build
+.deps
+Makefile
+config.h
+config.status
+createtorrent
+*.o
+stamp-h1
