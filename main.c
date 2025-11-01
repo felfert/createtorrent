@@ -20,7 +20,7 @@
 #define MAX_ANNOUNCE  100
 
 void help_message();
-int create_announce( char** const, int, char** const, int, const char*, const char*, const char*, int );
+int create_announce( char** const, int, char** const, int, const char*, int );
 int create_from_file( const char*, FILE*, long long, int );
 int create_from_directory( const char*, FILE*, int );
 int create_from_assortment( char** const, int, FILE*, int );
@@ -31,10 +31,10 @@ char* comment = NULL;
 int inclusive = 0;
 int private = 0;
 int use_dht = 0;
-char* sha = NULL;
+unsigned char* sha = NULL;
 int shasize = 0;
 int bytesin = 0;
-char* buf = NULL;
+unsigned char* buf = NULL;
 
 int main( int argc, char** const argv)
 {
@@ -45,8 +45,6 @@ int main( int argc, char** const argv)
 	char** src = NULL;
 	int no_src = 0;
 	char* outputfile = NULL;
-	char* port = "6881";
-	char* path = "/announce";
 	int piecelen = 256 * 1024;
 	char dht[60];
 
@@ -57,8 +55,6 @@ int main( int argc, char** const argv)
 			{ "announce",	 1, 0, 'a' }, // announce
 			{ "help",	 0, 0, 'h' },
 			{ "version",	 0, 0, 'V' },
-			{ "port",	 1, 0, 'p' },
-			{ "path",	 1, 0, 'P' },
 			{ "piecelength", 1, 0, 'l' },
 			{ "comment",	 1, 0, 'c' },
 			{ "inclusive",	 0, 0, 'i' },
@@ -81,9 +77,6 @@ int main( int argc, char** const argv)
 		case 'x':
 			private = 1;
 			break;
-		case 'P':
-			path = optarg;
-			break;
 		case 'a':
 			if (no_announce <= MAX_ANNOUNCE - 1)
 				announce[no_announce++] = optarg;
@@ -92,9 +85,6 @@ int main( int argc, char** const argv)
 			break;
 		case 'd':
 			use_dht = 1;
-			break;
-		case 'p':
-			port = optarg;
 			break;
 		case 'h':
 			help_message();
@@ -142,9 +132,8 @@ int main( int argc, char** const argv)
 	}
 
 
-	if (no_announce > 0 && announce[0] && src &&
-	    outputfile && port && path)
-		return create_announce(announce, no_announce, src, no_src, outputfile, port, path, piecelen);
+	if (no_announce > 0 && announce[0] && src && outputfile)
+		return create_announce(announce, no_announce, src, no_src, outputfile, piecelen);
 
 	free(announce);
 
@@ -152,13 +141,12 @@ int main( int argc, char** const argv)
 	return 1;
 }
 
-int create_announce(char** const announce, int no_announce, char** const src, int no_src, const char* output, const char* port, const char* path, int piecelen)
+int create_announce(char** const announce, int no_announce, char** const src, int no_src, const char* output, int piecelen)
 {
 	struct stat s;
 	const char* onesrc = *src;
 	char *tok;
 	int ret = 0;
-	int p = atoi(port);
 	int i;
 	char *creationtag = "createtorrent/" VERSION;
 
@@ -174,23 +162,18 @@ int create_announce(char** const announce, int no_announce, char** const src, in
 		strtok(tok, "/");
 		strtok(NULL, "/");
 		if ( strtok(NULL, "/") == NULL) {
-			fprintf(stderr, "warning: deprecated use of announce. Use the full path of the tracker url.\n");
-			fprintf(stderr, "     ex: http://example.com/announce O http://example.com:6881/announce.php\n");
-			fprintf(f, "d8:announce%d:%s:%s%s",
-				strlen(announce[0]) + strlen(path )
-				+ strlen(port) + 1, announce[0], port,
-				path);
-			if (no_announce > 1)
-				fprintf(stderr, "warning: cannot use multiple announce with legacy port and path tags\n");
+			fprintf(stderr, "error: deprecated use of announce. Use the full path of the tracker url.\n");
+			fprintf(stderr, "       eg: http://example.com/announce O http://example.com:6881/announce.php\n");
+            ret = 1;
 		} else {
-			fprintf(f, "d8:announce%d:%s",
+			fprintf(f, "d8:announce%lu:%s",
 				strlen(announce[0]), announce[0]);
 
 			// "announce-list" - BEP 12
 			if (no_announce > 1) {
 				fprintf(f, "13:announce-listl");
 				for (i = 0; i < no_announce; i++) {
-					fprintf(f, "l%d:%se",
+					fprintf(f, "l%lu:%se",
 						strlen( announce[i]),
 						announce[i]);
 				}
@@ -200,11 +183,11 @@ int create_announce(char** const announce, int no_announce, char** const src, in
 
 		// "comment"
 		if (comment)
-			fprintf(f, "7:comment%d:%s",
+			fprintf(f, "7:comment%lu:%s",
 				strlen( comment ), comment);
 
 		// "created by"
-		fprintf(f, "10:created by%d:%s", strlen( creationtag ),
+		fprintf(f, "10:created by%lu:%s", strlen( creationtag ),
 			creationtag);
 
 		// "creation date"
@@ -255,14 +238,12 @@ void write_name(const char* name, FILE* f)
 
 	q = basename(p);
 
-	fprintf(f, "4:name%d:%s", strlen(q), q);
+	fprintf(f, "4:name%lu:%s", strlen(q), q);
 	free(p);
 }
 
 int create_from_file(const char* src, FILE* f, long long fsize, int piecelen)
 {
-	char* sha;
-	char* buf;
 	int r, shalen;
 	FILE* fs = fopen(src, "rb");
 
@@ -278,8 +259,8 @@ int create_from_file(const char* src, FILE* f, long long fsize, int piecelen)
 	fprintf(f, "6:pieces%d:", shalen * 20);
 
 	if (fs) {
-		sha = (char*)malloc(sizeof(char) * SHA_DIGEST_LENGTH);
-		buf = (char*)malloc(piecelen);
+		unsigned char *sha = malloc(sizeof(char) * SHA_DIGEST_LENGTH);
+		unsigned char *buf = malloc(piecelen);
 		printf("computing sha1... ");
 		fflush(stdout);
 		while ((r = fread( buf, 1, piecelen, fs))) {
@@ -310,7 +291,7 @@ void format_path(char *in, char *out)
 	memcpy(out, "pathl", 5);
 	s = strtok(in, "/");
 	while (s) {
-		snprintf(t, sizeof(t), "%i:%s", strlen(s), s);
+		snprintf(t, sizeof(t), "%lu:%s", strlen(s), s);
 		strcat(out, t);
 		s = strtok(NULL, "/");
 	}
@@ -332,7 +313,7 @@ int add_file(FILE *torrent, long long fsize, char *fname, int piecelen, const ch
 		while ( ( r = fread( buf + bytesin, 1, piecelen - bytesin, fs ) ) ) {
 			bytesin += r;
 			if ( bytesin == piecelen ) {
-				sha = (char*)realloc( sha, shasize + 20 );
+				sha = realloc( sha, shasize + 20 );
 				SHA1( buf, bytesin, sha + shasize );
 				shasize += 20;
 				bytesin = 0;
@@ -391,7 +372,7 @@ int create_from_directory( const char* src, FILE* f, int piecelen )
 
 	if ( dir ) {
 		char src_p[1024];
-		buf = (char*)malloc( piecelen );
+		buf = malloc( piecelen );
 
 		// start of the "files" list
 		fputs( "5:filesl", f );
@@ -412,7 +393,7 @@ int create_from_directory( const char* src, FILE* f, int piecelen )
 			if ( sha )
 				fwrite( sha, 1, shasize, f );
 			if ( bytesin ) {
-				char sha[ 20 ];
+				unsigned char sha[ 20 ];
 				SHA1( buf, bytesin, sha );
 				fwrite( sha, 1, 20, f );
 			}
@@ -436,11 +417,12 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 	int i, j;
 	char *p;
 	char *q;
-	char *lst_slash;
+	char *last_slash = NULL;
 	char *common;
 	char **filename;
 
-	filename = malloc( sizeof( char* ) * no_src );
+	filename = malloc( sizeof( char* ) * (1 + no_src));
+    filename[0] = NULL;
 	// check for dupes
 	for ( i = 0; i < no_src; i++ ) {
 		filename[i] = (char*)canonicalize_file_name( src[i] );
@@ -477,12 +459,13 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 				if ( *p != *q )
 					break;
 				if ( *p == '/' )
-				    lst_slash = p;
+				    last_slash = p;
 				p++;
 				q++;
 			}
 			*p = '\0';
-			lst_slash[1] = '\0';
+            if (NULL != last_slash)
+                last_slash[1] = '\0';
 		}
 		printf("using base directory \"%s\"\n", common);
 		
@@ -495,7 +478,7 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 			common = "root";
 		}
 
-		buf = (char*)malloc( piecelen );
+		buf = malloc( piecelen );
 
 		// start of "files" list
 		fputs( "5:filesl", f );
@@ -536,7 +519,7 @@ int create_from_assortment( char** const src, int no_src, FILE* f, int piecelen 
 			if ( sha )
 				fwrite( sha, 1, shasize, f );
 			if ( bytesin ) {
-				char sha[ 20 ];
+				unsigned char sha[ 20 ];
 				SHA1( buf, bytesin, sha );
 				fwrite( sha, 1, 20, f );
 			}
