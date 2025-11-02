@@ -4,8 +4,8 @@ createtorrent_LDADD =
 createtorrent_CPPFLAGS = -D_FILE_OFFSET_BITS=64
 createtorrent_CFLAGS = -Wall -Wextra
 
-MAINTAINERCLEANFILES = -r \
-		aclocal.m4 config.h.in* configure Makefile.in \
+MAINTAINERCLEANFILES = -r *~ \
+		aclocal.m4 config.h.in configure Makefile.in \
         missing compile depcomp install-sh \
         config.sub config.guess autom4te.cache .deps
 
